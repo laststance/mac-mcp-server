@@ -12,15 +12,20 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import { createMcpServer } from './lib/server.js'
+import { registerAllTools } from './lib/register-tools.js'
 
 /**
  * Main entry point for the MCP server.
  *
- * Initializes the server and connects via stdio transport for
- * Claude Code compatibility.
+ * Initializes the server, registers all macOS automation tools,
+ * and connects via stdio transport for Claude Code compatibility.
  */
 async function main(): Promise<void> {
   const server = createMcpServer()
+
+  // Register all 44 macOS automation tools
+  registerAllTools(server)
+
   const transport = new StdioServerTransport()
   await server.connect(transport)
 }

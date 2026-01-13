@@ -31,6 +31,13 @@ const execFileAsync = promisify(execFile)
 const DEFAULT_TIMEOUT = 30000
 
 /**
+ * Default maximum dimension for screenshots returned as base64.
+ * Anthropic API limits images to 2000px when >20 images in a request.
+ * Using 1920px as a safe margin.
+ */
+const DEFAULT_MAX_DIMENSION = 1920
+
+/**
  * Supported output formats.
  */
 type ScreenshotFormat = 'png' | 'jpg'
@@ -38,6 +45,14 @@ type ScreenshotFormat = 'png' | 'jpg'
 // ============================================================================
 // Interfaces
 // ============================================================================
+
+/**
+ * Image dimensions returned by sips.
+ */
+interface ImageDimensions {
+  width: number
+  height: number
+}
 
 /**
  * Region specification for partial screen capture.
@@ -67,6 +82,8 @@ export interface ScreenshotInput {
   format?: ScreenshotFormat
   /** File path to save screenshot (if not provided, returns base64) */
   filePath?: string
+  /** Maximum dimension (width or height) for base64 output. Default: 1920. Set to 0 to disable resizing. */
+  maxDimension?: number
 }
 
 /**
@@ -115,6 +132,7 @@ const RegionSchema = z.object({
  * @param region - Region coordinates for partial capture
  * @param format - Output format (png or jpg, defaults to png)
  * @param filePath - File path to save screenshot
+ * @param maxDimension - Maximum dimension for base64 output (default: 1920, 0 to disable)
  */
 export const TakeScreenshotSchema = z.object({
   display: z
@@ -136,6 +154,14 @@ export const TakeScreenshotSchema = z.object({
     .string()
     .optional()
     .describe('File path to save screenshot (returns base64 if not specified)'),
+  maxDimension: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Maximum dimension (width or height) for base64 output. Default: 1920. Set to 0 to disable resizing.',
+    ),
 })
 
 // ============================================================================
@@ -276,6 +302,100 @@ async function cleanupTempFile(filePath: string): Promise<void> {
   }
 }
 
+/**
+ * Gets image dimensions using macOS sips command.
+ *
+ * @param imagePath - Path to the image file
+ * @returns Image dimensions (width and height)
+ * @throws Error if sips command fails or output cannot be parsed
+ *
+ * @example
+ * const dims = await getImageDimensions('/tmp/screenshot.png')
+ * // => { width: 2880, height: 1800 }
+ */
+async function getImageDimensions(imagePath: string): Promise<ImageDimensions> {
+  const { stdout } = await execFileAsync('sips', [
+    '-g',
+    'pixelWidth',
+    '-g',
+    'pixelHeight',
+    imagePath,
+  ])
+
+  // Parse sips output:
+  // /path/to/image.png
+  //   pixelWidth: 2880
+  //   pixelHeight: 1800
+  const widthMatch = /pixelWidth:\s*(\d+)/i.exec(stdout)
+  const heightMatch = /pixelHeight:\s*(\d+)/i.exec(stdout)
+
+  const width = widthMatch?.[1]
+  const height = heightMatch?.[1]
+
+  if (!width || !height) {
+    throw new Error('Failed to parse image dimensions from sips output')
+  }
+
+  return {
+    width: parseInt(width, 10),
+    height: parseInt(height, 10),
+  }
+}
+
+/**
+ * Resizes an image to fit within maxDimension, maintaining aspect ratio.
+ * Uses macOS sips command (no external dependencies).
+ *
+ * @param imagePath - Path to the image file (modified in-place)
+ * @param maxDimension - Maximum width or height in pixels
+ * @returns void
+ *
+ * @example
+ * // Resize 2880x1800 image to fit within 1920px
+ * await resizeImage('/tmp/screenshot.png', 1920)
+ * // Result: 1920x1200 (aspect ratio preserved)
+ */
+async function resizeImage(
+  imagePath: string,
+  maxDimension: number,
+): Promise<void> {
+  // sips -Z <maxDimension> resizes to fit within maxDimension, preserving aspect ratio
+  await execFileAsync('sips', ['-Z', String(maxDimension), imagePath])
+}
+
+/**
+ * Resizes image if it exceeds maxDimension.
+ * Only processes images where width or height > maxDimension.
+ *
+ * @param imagePath - Path to the image file
+ * @param maxDimension - Maximum allowed dimension (0 to skip resizing)
+ * @returns void
+ *
+ * @example
+ * // 2880x1800 image with maxDimension=1920 -> resized to 1920x1200
+ * await resizeImageIfNeeded('/tmp/screenshot.png', 1920)
+ *
+ * @example
+ * // 800x600 image with maxDimension=1920 -> no change (already small)
+ * await resizeImageIfNeeded('/tmp/small.png', 1920)
+ */
+async function resizeImageIfNeeded(
+  imagePath: string,
+  maxDimension: number,
+): Promise<void> {
+  // Skip if resizing is disabled
+  if (maxDimension <= 0) {
+    return
+  }
+
+  const dimensions = await getImageDimensions(imagePath)
+
+  // Only resize if either dimension exceeds the limit
+  if (dimensions.width > maxDimension || dimensions.height > maxDimension) {
+    await resizeImage(imagePath, maxDimension)
+  }
+}
+
 // ============================================================================
 // Tool Implementation
 // ============================================================================
@@ -286,13 +406,17 @@ async function cleanupTempFile(filePath: string): Promise<void> {
  * Uses the native screencapture command for reliable capture.
  * Supports full screen, display, window, and region capture.
  *
+ * For base64 output, images are automatically resized to fit within maxDimension
+ * (default: 1920px) to comply with Anthropic API limits (max 2000px when >20 images).
+ *
  * @param input - Capture options
+ * @param input.maxDimension - Max dimension for base64 output (default: 1920, 0 to disable)
  * @returns
  * - On success: { success: true, data: { base64?, filePath?, format } }
  * - On failure: { success: false, error: string }
  *
  * @example
- * // Capture full screen
+ * // Capture full screen (auto-resized to max 1920px for base64)
  * await takeScreenshot({})
  *
  * @example
@@ -304,11 +428,15 @@ async function cleanupTempFile(filePath: string): Promise<void> {
  * await takeScreenshot({ windowId: 12345 })
  *
  * @example
- * // Capture region and save to file
+ * // Capture region and save to file (no resize for file output)
  * await takeScreenshot({
  *   region: { x: 100, y: 100, width: 800, height: 600 },
  *   filePath: '/tmp/screenshot.png'
  * })
+ *
+ * @example
+ * // Capture at full resolution (disable resize)
+ * await takeScreenshot({ maxDimension: 0 })
  *
  * Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7, 14.8, 11.6
  */
@@ -317,6 +445,7 @@ export async function takeScreenshot(
 ): Promise<ScreenshotResult> {
   const format: ScreenshotFormat = input.format ?? 'png'
   const outputToFile = input.filePath !== undefined
+  const maxDimension = input.maxDimension ?? DEFAULT_MAX_DIMENSION
   let outputPath: string
 
   // Determine output path
@@ -365,6 +494,10 @@ export async function takeScreenshot(
     } else {
       // Read temp file and convert to base64
       try {
+        // Resize image if needed to comply with API limits
+        // (Anthropic API: max 2000px when >20 images in request)
+        await resizeImageIfNeeded(outputPath, maxDimension)
+
         const imageData = await fs.promises.readFile(outputPath)
         const base64 = imageData.toString('base64')
 
