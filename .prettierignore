@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# pnpm
+pnpm-lock.yaml
+
+# IDE
+.idea/
+.vscode/
+
+# Claude/Kiro config (preserve custom formatting)
+.claude/
+.kiro/

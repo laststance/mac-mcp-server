@@ -1,0 +1,59 @@
+{
+  "name": "mac-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server for macOS automation via AppleScript",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mac-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "prepare": "husky",
+    "prettier": "prettier --ignore-unknown --write ."
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "macos",
+    "applescript",
+    "automation",
+    "claude"
+  ],
+  "author": "Laststance.io",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/laststance/mac-mcp-server"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.6",
+    "eslint": "^9.39.2",
+    "eslint-config-ts-prefixer": "^4.1.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  },
+  "lint-staged": {
+    "*": "prettier --ignore-unknown --write"
+  }
+}
