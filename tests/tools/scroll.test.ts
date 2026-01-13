@@ -16,8 +16,6 @@ import {
   scrollToElement,
   ScrollSchema,
   ScrollToElementSchema,
-  type ScrollResult,
-  type ScrollToElementResult,
 } from '../../src/tools/scroll.js'
 
 /**

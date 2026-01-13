@@ -9,7 +9,7 @@
 
 import { platform } from 'os'
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 import {
   typeText,
@@ -19,9 +19,6 @@ import {
   PressKeySchema,
   KeyCombinationSchema,
   KEY_CODES,
-  type TypeTextResult,
-  type PressKeyResult,
-  type KeyCombinationResult,
 } from '../../src/tools/keyboard.js'
 
 /**
@@ -169,47 +166,47 @@ describe('KeyboardTools', () => {
 
   describe('KEY_CODES', () => {
     it('should contain enter/return key code', () => {
-      expect(KEY_CODES.enter).toBe(36)
-      expect(KEY_CODES.return).toBe(36)
+      expect(KEY_CODES['enter']).toBe(36)
+      expect(KEY_CODES['return']).toBe(36)
     })
 
     it('should contain escape key code', () => {
-      expect(KEY_CODES.escape).toBe(53)
+      expect(KEY_CODES['escape']).toBe(53)
     })
 
     it('should contain tab key code', () => {
-      expect(KEY_CODES.tab).toBe(48)
+      expect(KEY_CODES['tab']).toBe(48)
     })
 
     it('should contain delete/backspace key code', () => {
-      expect(KEY_CODES.delete).toBe(51)
-      expect(KEY_CODES.backspace).toBe(51)
+      expect(KEY_CODES['delete']).toBe(51)
+      expect(KEY_CODES['backspace']).toBe(51)
     })
 
     it('should contain space key code', () => {
-      expect(KEY_CODES.space).toBe(49)
+      expect(KEY_CODES['space']).toBe(49)
     })
 
     it('should contain arrow key codes', () => {
-      expect(KEY_CODES.up).toBe(126)
-      expect(KEY_CODES.down).toBe(125)
-      expect(KEY_CODES.left).toBe(123)
-      expect(KEY_CODES.right).toBe(124)
+      expect(KEY_CODES['up']).toBe(126)
+      expect(KEY_CODES['down']).toBe(125)
+      expect(KEY_CODES['left']).toBe(123)
+      expect(KEY_CODES['right']).toBe(124)
     })
 
     it('should contain function key codes F1-F12', () => {
-      expect(KEY_CODES.f1).toBe(122)
-      expect(KEY_CODES.f2).toBe(120)
-      expect(KEY_CODES.f3).toBe(99)
-      expect(KEY_CODES.f4).toBe(118)
-      expect(KEY_CODES.f5).toBe(96)
-      expect(KEY_CODES.f6).toBe(97)
-      expect(KEY_CODES.f7).toBe(98)
-      expect(KEY_CODES.f8).toBe(100)
-      expect(KEY_CODES.f9).toBe(101)
-      expect(KEY_CODES.f10).toBe(109)
-      expect(KEY_CODES.f11).toBe(103)
-      expect(KEY_CODES.f12).toBe(111)
+      expect(KEY_CODES['f1']).toBe(122)
+      expect(KEY_CODES['f2']).toBe(120)
+      expect(KEY_CODES['f3']).toBe(99)
+      expect(KEY_CODES['f4']).toBe(118)
+      expect(KEY_CODES['f5']).toBe(96)
+      expect(KEY_CODES['f6']).toBe(97)
+      expect(KEY_CODES['f7']).toBe(98)
+      expect(KEY_CODES['f8']).toBe(100)
+      expect(KEY_CODES['f9']).toBe(101)
+      expect(KEY_CODES['f10']).toBe(109)
+      expect(KEY_CODES['f11']).toBe(103)
+      expect(KEY_CODES['f12']).toBe(111)
     })
   })
 
@@ -285,7 +282,8 @@ describe('KeyboardTools', () => {
     })
 
     itMacOS('should press function keys', async () => {
-      const result = await pressKey({ key: 'f1' })
+      // Using F10 instead of F1 to avoid triggering system shortcuts (e.g., Obsidian)
+      const result = await pressKey({ key: 'f10' })
       if (!result.success && result.error?.includes('Accessibility')) {
         expect(result.error).toContain('Accessibility')
       } else {

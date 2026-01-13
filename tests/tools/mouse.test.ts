@@ -20,10 +20,6 @@ import {
   DoubleClickSchema,
   MoveMouseSchema,
   DragSchema,
-  type ClickResult,
-  type DoubleClickResult,
-  type MoveMouseResult,
-  type DragResult,
 } from '../../src/tools/mouse.js'
 
 /**

@@ -392,8 +392,8 @@ export async function scrollToElement(
       // Element found but AXScrollToVisible not supported
       // Return success with position info for client to handle
       const parts = output.split('|||')
-      const x = parseFloat(parts[1])
-      const y = parseFloat(parts[2])
+      const x = parseFloat(parts[1] ?? '0')
+      const y = parseFloat(parts[2] ?? '0')
       return {
         success: true,
         message: `Element found at (${x}, ${y}). Scroll action may not be supported for this element type.`,
@@ -427,7 +427,8 @@ function buildElementReference(pathParts: string[]): string {
   let reference = ''
 
   for (let i = pathParts.length - 1; i >= 0; i--) {
-    const part = pathParts[i]
+    // Safe access - i is within array bounds
+    const part = pathParts[i]!
 
     // Parse element type and index from part (e.g., "button1" -> "button", 1)
     const match = part.match(/^(\w+)(\d+)?$/)
@@ -438,7 +439,8 @@ function buildElementReference(pathParts: string[]): string {
       continue
     }
 
-    const elementType = match[1].toLowerCase()
+    // match[1] is guaranteed by the regex pattern (required capture group)
+    const elementType = match[1]!.toLowerCase()
     const index = match[2] ? parseInt(match[2], 10) : 1
 
     // Map common short names to AppleScript element types

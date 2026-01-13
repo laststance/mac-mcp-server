@@ -172,8 +172,8 @@
 
 ### Phase 5: Screenshot Capture (Screen Recording Required)
 
-- [ ] 9. Screenshot Tools
-- [ ] 9.1 Implement screen capture functionality
+- [x] 9. Screenshot Tools
+- [x] 9.1 Implement screen capture functionality
   - Capture entire primary screen when no parameters specified
   - Capture specified display when display number provided
   - Capture only specified window when window ID provided
@@ -182,7 +182,7 @@
   - Require Screen Recording permission with guidance on denial
   - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.8, 11.6_
 
-- [ ] 9.2 Implement screenshot output options
+- [x] 9.2 Implement screenshot output options
   - Return screenshot as base64-encoded data by default
   - Support PNG and JPEG output formats
   - Save screenshot to specified file path when requested
@@ -192,15 +192,15 @@
 
 ### Phase 6: UI Automation (Accessibility Required)
 
-- [ ] 10. UI Element Interaction Tools
-- [ ] 10.1 Implement UI element tree retrieval
+- [x] 10. UI Element Interaction Tools
+- [x] 10.1 Implement UI element tree retrieval
   - Return tree of accessible UI elements for specified application
   - Include element roles, titles, values, and positions in tree
   - Limit tree traversal to specified maximum depth
   - Generate unique element path identifiers for each element
   - _Requirements: 15.1, 15.2_
 
-- [ ] 10.2 Implement UI element interaction capabilities
+- [x] 10.2 Implement UI element interaction capabilities
   - Click specified UI element by element path
   - Return current value of specified UI element
   - Set editable element values when requested
@@ -213,8 +213,8 @@
 
 ### Phase 7: Menu Operations
 
-- [ ] 11. Menu Bar and Status Item Tools
-- [ ] 11.1 (P) Implement application menu tools
+- [x] 11. Menu Bar and Status Item Tools
+- [x] 11.1 (P) Implement application menu tools
   - Return complete menu hierarchy for specified application
   - Include menu names, item names, and keyboard shortcuts in hierarchy
   - Click specified menu item by menu path
@@ -222,7 +222,7 @@
   - Return error with available items when menu path invalid
   - _Requirements: 17.1, 17.2, 17.3, 17.4_
 
-- [ ] 11.2 (P) Implement status bar tools
+- [x] 11.2 (P) Implement status bar tools
   - Return all visible status bar items with descriptions and positions
   - Include associated process names for status items
   - Click status bar icon by description or process name
@@ -230,7 +230,7 @@
   - Return error listing available items when status item not found
   - _Requirements: 17.5, 17.6, 17.7, 17.8_
 
-- [ ] 11.3 Implement menu bar structure retrieval
+- [x] 11.3 Implement menu bar structure retrieval
   - Return complete menu bar hierarchy for specified process
   - Include all menus, items, enabled states, and checked states
   - Support system menu extras via SystemUIServer process
@@ -242,15 +242,15 @@
 
 ### Phase 8: Integration & Security
 
-- [ ] 12. Integration and Security Hardening
-- [ ] 12.1 Enforce security constraints across all tools
+- [x] 12. Integration and Security Hardening
+- [x] 12.1 Enforce security constraints across all tools
   - Ensure server only executes AppleScript commands, not arbitrary shell commands
   - Restrict window management to properties permitted by Accessibility APIs
   - Prevent persistence or transmission of user data beyond immediate responses
   - Sanitize all inputs to prevent AppleScript injection
   - _Requirements: 11.2, 11.3, 11.4_
 
-- [ ] 12.2 Validate end-to-end tool operation
+- [x] 12.2 Validate end-to-end tool operation
   - Verify all tools respond correctly with MCP-compliant format
   - Test error responses for all error categories
   - Validate permission guidance messages are actionable
