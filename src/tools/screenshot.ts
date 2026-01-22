@@ -38,6 +38,30 @@ const DEFAULT_TIMEOUT = 30000
 const DEFAULT_MAX_DIMENSION = 1920
 
 /**
+ * Default maximum file size for screenshots returned as base64.
+ * Claude API has ~20MB per request limit, but with many images,
+ * keeping each under 1.8MB ensures ~10-20 screenshots per session safely.
+ * Using 1.8MB (1,800,000 bytes) as a safe margin below 2MB.
+ */
+const DEFAULT_MAX_FILE_SIZE = 1_800_000
+
+/**
+ * Default JPEG quality for compressed screenshots.
+ * 85 provides good visual quality with significant size reduction.
+ */
+const DEFAULT_JPEG_QUALITY = 85
+
+/**
+ * Minimum JPEG quality to maintain reasonable visual quality.
+ */
+const MIN_JPEG_QUALITY = 50
+
+/**
+ * Quality step for iterative compression.
+ */
+const QUALITY_STEP = 10
+
+/**
  * Supported output formats.
  */
 type ScreenshotFormat = 'png' | 'jpg'
@@ -84,6 +108,10 @@ export interface ScreenshotInput {
   filePath?: string
   /** Maximum dimension (width or height) for base64 output. Default: 1920. Set to 0 to disable resizing. */
   maxDimension?: number
+  /** Maximum file size in bytes for base64 output. Default: 1800000 (1.8MB). Set to 0 to disable compression. */
+  maxFileSize?: number
+  /** JPEG quality for compression (1-100). Default: 85. */
+  quality?: number
 }
 
 /**
@@ -161,6 +189,23 @@ export const TakeScreenshotSchema = z.object({
     .optional()
     .describe(
       'Maximum dimension (width or height) for base64 output. Default: 1920. Set to 0 to disable resizing.',
+    ),
+  maxFileSize: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Maximum file size in bytes for base64 output. Default: 1800000 (1.8MB). Set to 0 to disable compression. Images exceeding this will be compressed via JPEG quality reduction.',
+    ),
+  quality: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe(
+      'JPEG quality for compression (1-100). Default: 85. Only used when maxFileSize compression is applied.',
     ),
 })
 
@@ -396,6 +441,123 @@ async function resizeImageIfNeeded(
   }
 }
 
+/**
+ * Gets file size in bytes.
+ *
+ * @param filePath - Path to the file
+ * @returns File size in bytes
+ *
+ * @example
+ * const size = await getFileSize('/tmp/screenshot.jpg')
+ * // => 1234567 (bytes)
+ */
+async function getFileSize(filePath: string): Promise<number> {
+  const stats = await fs.promises.stat(filePath)
+  return stats.size
+}
+
+/**
+ * Converts an image to JPEG format with specified quality.
+ * Uses macOS sips command (no external dependencies).
+ *
+ * @param imagePath - Path to the image file (converted in-place, extension changes to .jpg)
+ * @param quality - JPEG quality (1-100)
+ * @returns Path to the converted JPEG file
+ *
+ * @example
+ * const jpegPath = await convertToJpeg('/tmp/screenshot.png', 85)
+ * // => '/tmp/screenshot.jpg'
+ */
+async function convertToJpeg(
+  imagePath: string,
+  quality: number,
+): Promise<string> {
+  // sips -s format jpeg -s formatOptions <quality> <file>
+  await execFileAsync('sips', [
+    '-s',
+    'format',
+    'jpeg',
+    '-s',
+    'formatOptions',
+    String(quality),
+    imagePath,
+  ])
+
+  // sips keeps the same filename but we need to rename to .jpg
+  const jpegPath = imagePath.replace(/\.[^.]+$/, '.jpg')
+  if (imagePath !== jpegPath) {
+    await fs.promises.rename(imagePath, jpegPath)
+  }
+
+  return jpegPath
+}
+
+/**
+ * Compresses an image to fit within maxFileSize using iterative JPEG quality reduction.
+ * If minimum quality is reached and size still exceeds limit, reduces dimensions.
+ *
+ * @param imagePath - Path to the image file
+ * @param maxFileSize - Maximum file size in bytes (0 to skip compression)
+ * @param initialQuality - Initial JPEG quality (default: 85)
+ * @param maxDimension - Maximum dimension for dimension reduction fallback
+ * @returns Path to the compressed image (may be different if converted to JPEG)
+ *
+ * @example
+ * // Compress a 3MB PNG to under 1.8MB
+ * const result = await compressToTargetSize('/tmp/screenshot.png', 1_800_000, 85, 1920)
+ * // => '/tmp/screenshot.jpg' (compressed)
+ */
+async function compressToTargetSize(
+  imagePath: string,
+  maxFileSize: number,
+  initialQuality: number,
+  maxDimension: number,
+): Promise<string> {
+  // Skip if compression is disabled
+  if (maxFileSize <= 0) {
+    return imagePath
+  }
+
+  // Check current file size
+  let currentSize = await getFileSize(imagePath)
+  if (currentSize <= maxFileSize) {
+    return imagePath
+  }
+
+  // Convert to JPEG and iteratively reduce quality
+  let currentPath = imagePath
+  let quality = initialQuality
+
+  while (currentSize > maxFileSize && quality >= MIN_JPEG_QUALITY) {
+    currentPath = await convertToJpeg(currentPath, quality)
+    currentSize = await getFileSize(currentPath)
+
+    if (currentSize <= maxFileSize) {
+      break
+    }
+
+    quality -= QUALITY_STEP
+  }
+
+  // If still too large, reduce dimensions and retry
+  if (currentSize > maxFileSize && maxDimension > 0) {
+    const dimensions = await getImageDimensions(currentPath)
+    const reducedDimension = Math.floor(
+      Math.max(dimensions.width, dimensions.height) * 0.75,
+    )
+
+    if (reducedDimension >= 640) {
+      // Don't go below 640px
+      await resizeImage(currentPath, reducedDimension)
+
+      // One more compression attempt at minimum quality
+      currentPath = await convertToJpeg(currentPath, MIN_JPEG_QUALITY)
+    }
+  }
+
+  return currentPath
+}
+
 // ============================================================================
 // Tool Implementation
 // ============================================================================
@@ -406,17 +568,20 @@ async function resizeImageIfNeeded(
  * Uses the native screencapture command for reliable capture.
  * Supports full screen, display, window, and region capture.
  *
- * For base64 output, images are automatically resized to fit within maxDimension
- * (default: 1920px) to comply with Anthropic API limits (max 2000px when >20 images).
+ * For base64 output, images are automatically:
+ * 1. Resized to fit within maxDimension (default: 1920px) for API compatibility
+ * 2. Compressed to fit within maxFileSize (default: 1.8MB) using JPEG quality reduction
  *
  * @param input - Capture options
  * @param input.maxDimension - Max dimension for base64 output (default: 1920, 0 to disable)
+ * @param input.maxFileSize - Max file size in bytes for base64 output (default: 1800000, 0 to disable)
+ * @param input.quality - JPEG quality for compression (default: 85)
  * @returns
  * - On success: { success: true, data: { base64?, filePath?, format } }
  * - On failure: { success: false, error: string }
  *
  * @example
- * // Capture full screen (auto-resized to max 1920px for base64)
+ * // Capture full screen (auto-resized and compressed for base64)
  * await takeScreenshot({})
  *
  * @example
@@ -428,15 +593,19 @@ async function resizeImageIfNeeded(
  * await takeScreenshot({ windowId: 12345 })
  *
  * @example
- * // Capture region and save to file (no resize for file output)
+ * // Capture region and save to file (no resize/compression for file output)
  * await takeScreenshot({
  *   region: { x: 100, y: 100, width: 800, height: 600 },
  *   filePath: '/tmp/screenshot.png'
  * })
  *
  * @example
- * // Capture at full resolution (disable resize)
- * await takeScreenshot({ maxDimension: 0 })
+ * // Capture at full resolution, no compression
+ * await takeScreenshot({ maxDimension: 0, maxFileSize: 0 })
+ *
+ * @example
+ * // Custom compression: max 1MB, quality 70
+ * await takeScreenshot({ maxFileSize: 1_000_000, quality: 70 })
  *
  * Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7, 14.8, 11.6
  */
@@ -446,6 +615,8 @@ export async function takeScreenshot(
   const format: ScreenshotFormat = input.format ?? 'png'
   const outputToFile = input.filePath !== undefined
   const maxDimension = input.maxDimension ?? DEFAULT_MAX_DIMENSION
+  const maxFileSize = input.maxFileSize ?? DEFAULT_MAX_FILE_SIZE
+  const quality = input.quality ?? DEFAULT_JPEG_QUALITY
   let outputPath: string
 
   // Determine output path
@@ -494,21 +665,38 @@ export async function takeScreenshot(
     } else {
       // Read temp file and convert to base64
       try {
-        // Resize image if needed to comply with API limits
+        // Step 1: Resize image if needed to comply with API dimension limits
         // (Anthropic API: max 2000px when >20 images in request)
         await resizeImageIfNeeded(outputPath, maxDimension)
 
-        const imageData = await fs.promises.readFile(outputPath)
+        // Step 2: Compress to target file size if needed
+        // Converts to JPEG and iteratively reduces quality to meet size limit
+        const compressedPath = await compressToTargetSize(
+          outputPath,
+          maxFileSize,
+          quality,
+          maxDimension,
+        )
+
+        // Determine final format (may have changed to jpg during compression)
+        const finalFormat: ScreenshotFormat = compressedPath.endsWith('.jpg')
+          ? 'jpg'
+          : format
+
+        const imageData = await fs.promises.readFile(compressedPath)
         const base64 = imageData.toString('base64')
 
-        // Clean up temp file
-        await cleanupTempFile(outputPath)
+        // Clean up temp files (original and compressed may be different)
+        await cleanupTempFile(compressedPath)
+        if (compressedPath !== outputPath) {
+          await cleanupTempFile(outputPath)
+        }
 
         return {
           success: true,
           data: {
             base64,
-            format,
+            format: finalFormat,
           },
         }
       } catch {
