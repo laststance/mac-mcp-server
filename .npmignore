@@ -1,0 +1,48 @@
+# Source files (not needed in published package)
+src/
+tests/
+
+# Development configuration
+.kiro/
+.husky/
+.vscode/
+.idea/
+logs/
+
+# Build and development files
+tsconfig.json
+tsup.config.*
+vitest.config.*
+eslint.config.*
+.eslintrc*
+.prettierrc*
+.prettierignore
+.editorconfig
+
+# Documentation for development only
+CLAUDE.md
+*.test.ts
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Package manager
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+node_modules/
+
+# Test and coverage
+coverage/
+.nyc_output/
+
+# Temp files
+*.log
+*.tmp
+.env*

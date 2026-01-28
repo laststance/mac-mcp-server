@@ -1,24 +1,63 @@
 # mac-mcp-server
 
+[![npm version](https://img.shields.io/npm/v/mac-mcp-server.svg)](https://www.npmjs.com/package/mac-mcp-server)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.11.0-brightgreen.svg)](https://nodejs.org/)
+[![macOS](https://img.shields.io/badge/macOS-10.15%2B-blue.svg)](https://www.apple.com/macos/)
+
 A macOS AppleScript MCP (Model Context Protocol) server that enables Claude Code and other AI assistants to automate macOS through AppleScript and JXA (JavaScript for Automation).
 
 ## Overview
 
-This MCP server provides a comprehensive set of tools for macOS automation, allowing AI assistants to:
+This MCP server provides 44 tools for comprehensive macOS automation, allowing AI assistants to:
 
 - Retrieve system information (hardware, battery, displays)
 - Manage applications (launch, quit, activate, list running apps)
 - Control windows (move, resize, focus, minimize)
 - Simulate keyboard and mouse input
 - Interact with UI elements via Accessibility APIs
-- Capture screenshots
+- Capture screenshots (auto-optimized for API compatibility)
 - Access clipboard and notifications
 - Control audio settings
 - Navigate menus and status bar items
 
 The server communicates over stdio for seamless Claude Code integration and uses AppleScript/JXA for system automation.
 
-## Features
+## Quick Start
+
+### Prerequisites
+
+- macOS 10.15 (Catalina) or later
+- Node.js 20.11.0 or later
+
+### Install from npm
+
+```bash
+npm install -g mac-mcp-server
+```
+
+### Configure Claude Code
+
+Add the following to your Claude Code MCP configuration (`~/.claude.json` or Claude Desktop settings):
+
+```json
+{
+  "mcpServers": {
+    "mac-mcp-server": {
+      "command": "npx",
+      "args": ["-y", "mac-mcp-server"]
+    }
+  }
+}
+```
+
+Restart Claude Code to load the MCP server.
+
+### Grant macOS Permissions
+
+On first use, macOS will prompt you to grant required permissions. See the [Permissions Guide](#macos-permissions) below for details.
+
+## Tool Reference
 
 ### System Information
 
@@ -27,19 +66,6 @@ The server communicates over stdio for seamless Claude Code integration and uses
 | `get_system_info`    | Retrieves macOS version, hardware model, processor, and memory |
 | `get_battery_status` | Gets battery percentage and charging status (MacBooks)         |
 | `get_display_info`   | Lists connected displays with resolution information           |
-
-### Clipboard Management
-
-| Tool            | Description                                             |
-| --------------- | ------------------------------------------------------- |
-| `get_clipboard` | Reads current clipboard content (text, image, or files) |
-| `set_clipboard` | Sets clipboard to specified text                        |
-
-### Notifications
-
-| Tool                | Description                                                    |
-| ------------------- | -------------------------------------------------------------- |
-| `send_notification` | Displays a macOS notification with optional subtitle and sound |
 
 ### Audio Control
 
@@ -50,7 +76,15 @@ The server communicates over stdio for seamless Claude Code integration and uses
 | `get_mute_status` | Checks if system audio is muted            |
 | `set_mute`        | Mutes or unmutes system audio              |
 
-### Application Lifecycle
+### Clipboard and Notifications
+
+| Tool                | Description                                                    |
+| ------------------- | -------------------------------------------------------------- |
+| `get_clipboard`     | Reads current clipboard content (text, image, or files)        |
+| `set_clipboard`     | Sets clipboard to specified text                               |
+| `send_notification` | Displays a macOS notification with optional subtitle and sound |
+
+### Application Management
 
 | Tool                | Description                                                 |
 | ------------------- | ----------------------------------------------------------- |
@@ -107,6 +141,13 @@ The server communicates over stdio for seamless Claude Code integration and uses
 | ----------------- | ------------------------------------------------------- |
 | `take_screenshot` | Captures screen, display, window, or region as PNG/JPEG |
 
+**Screenshot Features:**
+
+- **Auto-resize**: Screenshots are resized to max 1600px (configurable) for API compatibility
+- **Auto-compress**: File size limited to 1.8MB using JPEG compression when needed
+- **Full resolution**: Use `rawFile: true` for file output at full resolution
+- **Disable processing**: Set `maxDimension: 0` and `maxFileSize: 0` to disable all processing
+
 ### UI Element Interaction
 
 | Tool                   | Description                                      |
@@ -129,105 +170,58 @@ The server communicates over stdio for seamless Claude Code integration and uses
 | `click_status_bar_menu_item` | Clicks a menu item within a status bar menu      |
 | `get_menu_bar_structure`     | Gets complete menu bar hierarchy for a process   |
 
-## Installation
-
-### Prerequisites
-
-- macOS 10.15 (Catalina) or later
-- Node.js 20.11.0 or later
-
-### Install from npm
-
-```bash
-npm install -g mac-mcp-server
-```
-
-### Install from source
-
-```bash
-git clone https://github.com/laststance/mac-mcp-server.git
-cd mac-mcp-server
-pnpm install
-pnpm build
-```
-
-### Claude Code Configuration
-
-Add the following to your Claude Code MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "mac-mcp-server": {
-      "command": "npx",
-      "args": ["-y", "mac-mcp-server"]
-    }
-  }
-}
-```
-
-Or if installed from source:
-
-```json
-{
-  "mcpServers": {
-    "mac-mcp-server": {
-      "command": "node",
-      "args": ["/path/to/mac-mcp-server/dist/index.js"]
-    }
-  }
-}
-```
-
 ## macOS Permissions
 
 This server requires specific macOS permissions to function. The first time you use certain tools, macOS will prompt you to grant access.
 
-### Permission Types
+### Required Permissions
 
-#### Accessibility Permission
+#### 1. Accessibility
 
 **Required for:** Keyboard input, mouse control, UI element interaction, window management
 
 **Grant access:**
 
-1. Open System Settings > Privacy & Security > Accessibility
-2. Add Terminal (or Claude Code / your IDE) to the list of allowed apps
-3. Restart Terminal / Claude Code after granting permission
+1. Open **System Settings > Privacy & Security > Accessibility**
+2. Click the **+** button and add your terminal app (Terminal, iTerm2, or Claude Code)
+3. Toggle the switch to enable access
+4. **Restart your terminal** after granting permission
 
-**Direct link:**
+**Quick access:**
 
 ```bash
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 ```
 
-#### Automation Permission
+#### 2. Automation
 
 **Required for:** Controlling other applications (Finder, Safari, etc.)
 
 **Grant access:**
 
-1. Open System Settings > Privacy & Security > Automation
-2. Enable checkboxes for target applications under your terminal app
-3. If prompted during first use, click "OK" to allow
+1. Open **System Settings > Privacy & Security > Automation**
+2. Find your terminal app in the list
+3. Enable checkboxes for target applications you want to control
+4. If prompted during first use, click **OK** to allow
 
-**Direct link:**
+**Quick access:**
 
 ```bash
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
 ```
 
-#### Screen Recording Permission
+#### 3. Screen Recording
 
 **Required for:** Screenshots
 
 **Grant access:**
 
-1. Open System Settings > Privacy & Security > Screen Recording
-2. Add Terminal (or Claude Code / your IDE) to the list of allowed apps
-3. Restart Terminal / Claude Code after granting permission
+1. Open **System Settings > Privacy & Security > Screen Recording**
+2. Click the **+** button and add your terminal app
+3. Toggle the switch to enable access
+4. **Restart your terminal** after granting permission
 
-**Direct link:**
+**Quick access:**
 
 ```bash
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
@@ -235,18 +229,28 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapt
 
 ### Troubleshooting Permissions
 
-| Issue                                  | Solution                                                |
-| -------------------------------------- | ------------------------------------------------------- |
-| Permission added but not working       | Restart Terminal / Claude Code completely               |
-| App not appearing in list              | Try the operation once to trigger the permission dialog |
-| Permission still denied after granting | Remove the app from the list, then re-add it            |
-| All permission issues persist          | Restart macOS                                           |
-| "assistive access" error               | Grant Accessibility permission specifically             |
-| "-1743" error code                     | Grant Automation permission for the target app          |
+| Issue                                  | Solution                                                  |
+| -------------------------------------- | --------------------------------------------------------- |
+| Permission added but not working       | Restart your terminal app completely (Cmd+Q, then reopen) |
+| App not appearing in permission list   | Run the operation once to trigger the permission dialog   |
+| Permission still denied after granting | Remove the app from the list, restart, then re-add it     |
+| All permission issues persist          | Restart macOS                                             |
+| "assistive access" error               | Grant **Accessibility** permission specifically           |
+| "-1743" error code                     | Grant **Automation** permission for the target app        |
+| Screenshot returns black image         | Grant **Screen Recording** permission and restart         |
+
+### Permission Checklist
+
+Before using mac-mcp-server, verify these permissions are granted:
+
+- [ ] **Accessibility** - Terminal/Claude Code added and enabled
+- [ ] **Automation** - Target apps enabled under your terminal
+- [ ] **Screen Recording** - Terminal/Claude Code added and enabled
+- [ ] **App restarted** after granting permissions
 
 ## Usage Examples
 
-### Get System Information
+### System Information
 
 ```typescript
 // Get system info
@@ -313,19 +317,29 @@ await click({ x: 500, y: 300, modifiers: ['command'] })
 ### Screenshots
 
 ```typescript
-// Capture full screen (returns base64)
+// Capture full screen (auto-resized and compressed for API)
 await take_screenshot({})
 
-// Capture to file
+// Capture to file (also auto-processed by default)
 await take_screenshot({ filePath: '/tmp/screenshot.png' })
+
+// Capture at full resolution (no processing)
+await take_screenshot({ filePath: '/tmp/full.png', rawFile: true })
 
 // Capture specific region
 await take_screenshot({
   region: { x: 100, y: 100, width: 800, height: 600 },
 })
 
-// Capture specific display
-await take_screenshot({ display: 1 })
+// Custom compression settings
+await take_screenshot({
+  maxDimension: 1920, // Max 1920px
+  maxFileSize: 1_000_000, // Max 1MB
+  quality: 70, // JPEG quality 70
+})
+
+// Disable all processing for base64 output
+await take_screenshot({ maxDimension: 0, maxFileSize: 0 })
 ```
 
 ### UI Element Interaction
@@ -367,44 +381,43 @@ await get_menu_item_state({
 })
 ```
 
-## Development
+## Installation from Source
 
-### Build
+For development or customization:
 
 ```bash
+git clone https://github.com/laststance/mac-mcp-server.git
+cd mac-mcp-server
+pnpm install
 pnpm build
 ```
 
-### Development Mode (Watch)
+Then configure Claude Code to use the local build:
 
-```bash
-pnpm dev
+```json
+{
+  "mcpServers": {
+    "mac-mcp-server": {
+      "command": "node",
+      "args": ["/path/to/mac-mcp-server/dist/index.js"]
+    }
+  }
+}
 ```
 
-### Run Tests
+## Development
 
-```bash
-pnpm test
-```
+### Commands
 
-### Type Check
-
-```bash
-pnpm typecheck
-```
-
-### Lint
-
-```bash
-pnpm lint
-pnpm lint:fix
-```
-
-### Format
-
-```bash
-pnpm format
-```
+| Command          | Description               |
+| ---------------- | ------------------------- |
+| `pnpm build`     | Build for production      |
+| `pnpm dev`       | Development mode (watch)  |
+| `pnpm test`      | Run tests                 |
+| `pnpm typecheck` | TypeScript type checking  |
+| `pnpm lint`      | Lint code                 |
+| `pnpm lint:fix`  | Lint and auto-fix         |
+| `pnpm format`    | Format code with Prettier |
 
 ### Project Structure
 
@@ -446,6 +459,14 @@ This MCP server is designed with security in mind:
 - **Permission-gated access**: All sensitive operations require explicit macOS permission grants.
 - **Scoped automation**: Each tool has a specific, limited purpose rather than providing general system access.
 
+## Requirements
+
+| Requirement | Version                   |
+| ----------- | ------------------------- |
+| macOS       | 10.15 (Catalina) or later |
+| Node.js     | 20.11.0 or later          |
+| pnpm        | 10.28.0 (for development) |
+
 ## License
 
 MIT
@@ -453,3 +474,13 @@ MIT
 ## Author
 
 [Laststance.io](https://github.com/laststance)
+
+## Contributing
+
+Contributions are welcome. Please open an issue first to discuss what you would like to change.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request

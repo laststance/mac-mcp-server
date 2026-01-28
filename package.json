@@ -1,12 +1,18 @@
 {
   "name": "mac-mcp-server",
   "version": "0.1.0",
-  "description": "MCP Server for macOS automation via AppleScript",
+  "description": "MCP Server for macOS automation via AppleScript - 44 tools for system control, window management, keyboard/mouse input, screenshots, UI automation, and more",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "mac-mcp-server": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
     "dev": "tsup src/index.ts --format esm --watch",
@@ -18,7 +24,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "prepare": "husky",
-    "prettier": "prettier --ignore-unknown --write ."
+    "prettier": "prettier --ignore-unknown --write .",
+    "prepublishOnly": "pnpm run build && pnpm run typecheck"
   },
   "keywords": [
     "mcp",
@@ -26,14 +33,31 @@
     "macos",
     "applescript",
     "automation",
-    "claude"
+    "claude",
+    "claude-code",
+    "ai-assistant",
+    "jxa",
+    "javascript-for-automation",
+    "screenshot",
+    "keyboard",
+    "mouse",
+    "window-management",
+    "ui-automation",
+    "accessibility"
   ],
   "author": "Laststance.io",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/laststance/mac-mcp-server"
+    "url": "git+https://github.com/laststance/mac-mcp-server.git"
   },
+  "bugs": {
+    "url": "https://github.com/laststance/mac-mcp-server/issues"
+  },
+  "homepage": "https://github.com/laststance/mac-mcp-server#readme",
+  "os": [
+    "darwin"
+  ],
   "engines": {
     "node": ">=20.11.0"
   },
