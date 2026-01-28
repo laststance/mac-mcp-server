@@ -446,7 +446,7 @@ export function registerAllTools(server: McpServer): void {
 
   server.tool(
     'take_screenshot',
-    'Captures a screenshot of the screen, display, window, or region. Returns base64-encoded image (auto-resized to max 1920px, compressed to max 1.8MB via JPEG quality reduction) or saves to file at full resolution. Use maxFileSize/quality params to customize compression',
+    'Captures a screenshot of the screen, display, window, or region. Auto-resized to max 1600px and compressed to max 1.8MB for API compatibility (both file and base64 output). Use rawFile: true to save at full resolution, or maxDimension/maxFileSize: 0 to disable processing',
     TakeScreenshotSchema.shape,
     async (params) =>
       toMcpResponse(await takeScreenshot(params as ScreenshotInput)),
