@@ -10,41 +10,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 // System tools
-import {
-  GetSystemInfoSchema,
-  GetBatteryStatusSchema,
-  GetDisplayInfoSchema,
-  getSystemInfo,
-  getBatteryStatus,
-  getDisplayInfo,
-} from '../tools/system.js'
 
 // Audio tools
-import {
-  GetVolumeSchema,
-  SetVolumeSchema,
-  GetMuteStatusSchema,
-  SetMuteSchema,
-  getVolume,
-  setVolume,
-  getMuteStatus,
-  setMute,
-} from '../tools/audio.js'
 
 // Clipboard tools
-import {
-  GetClipboardSchema,
-  SetClipboardSchema,
-  getClipboard,
-  setClipboard,
-} from '../tools/clipboard.js'
 
 // Notification tools
-import {
-  SendNotificationSchema,
-  sendNotification,
-  type SendNotificationInput,
-} from '../tools/notification.js'
 
 // Application tools
 import {
@@ -57,6 +28,23 @@ import {
   quitApp,
   activateApp,
 } from '../tools/application.js'
+import {
+  GetVolumeSchema,
+  SetVolumeSchema,
+  GetMuteStatusSchema,
+  SetMuteSchema,
+  getVolume,
+  setVolume,
+  getMuteStatus,
+  setMute,
+} from '../tools/audio.js'
+
+import {
+  GetClipboardSchema,
+  SetClipboardSchema,
+  getClipboard,
+  setClipboard,
+} from '../tools/clipboard.js'
 
 // Finder tools
 import {
@@ -69,35 +57,8 @@ import {
 } from '../tools/finder.js'
 
 // Window tools
-import {
-  ListWindowsSchema,
-  FocusWindowSchema,
-  MoveWindowSchema,
-  ResizeWindowSchema,
-  MinimizeWindowSchema,
-  listWindows,
-  focusWindow,
-  moveWindow,
-  resizeWindow,
-  minimizeWindow,
-  type ListWindowsInput,
-  type WindowReferenceInput,
-  type MoveWindowInput,
-  type ResizeWindowInput,
-} from '../tools/window.js'
 
 // Mouse tools
-import {
-  ClickSchema,
-  DoubleClickSchema,
-  MoveMouseSchema,
-  DragSchema,
-  click,
-  doubleClick,
-  moveMouse,
-  drag,
-  type ClickInput,
-} from '../tools/mouse.js'
 
 // Keyboard tools
 import {
@@ -111,34 +72,10 @@ import {
 } from '../tools/keyboard.js'
 
 // Scroll tools
-import {
-  ScrollSchema,
-  ScrollToElementSchema,
-  scroll,
-  scrollToElement,
-  type ScrollInput,
-} from '../tools/scroll.js'
 
 // Screenshot tools
-import {
-  TakeScreenshotSchema,
-  takeScreenshot,
-  type ScreenshotInput,
-} from '../tools/screenshot.js'
 
 // UI Element tools
-import {
-  GetUIElementsSchema,
-  ClickUIElementSchema,
-  GetUIElementValueSchema,
-  SetUIElementValueSchema,
-  FocusUIElementSchema,
-  getUIElements,
-  clickUIElement,
-  getUIElementValue,
-  setUIElementValue,
-  focusUIElement,
-} from '../tools/ui-element.js'
 
 // Menu tools
 import {
@@ -157,6 +94,70 @@ import {
   clickStatusBarMenuItem,
   getMenuBarStructure,
 } from '../tools/menu.js'
+import {
+  ClickSchema,
+  DoubleClickSchema,
+  MoveMouseSchema,
+  DragSchema,
+  click,
+  doubleClick,
+  moveMouse,
+  drag,
+  type ClickInput,
+} from '../tools/mouse.js'
+import {
+  SendNotificationSchema,
+  sendNotification,
+  type SendNotificationInput,
+} from '../tools/notification.js'
+import {
+  TakeScreenshotSchema,
+  takeScreenshot,
+  type ScreenshotInput,
+} from '../tools/screenshot.js'
+import {
+  ScrollSchema,
+  ScrollToElementSchema,
+  scroll,
+  scrollToElement,
+  type ScrollInput,
+} from '../tools/scroll.js'
+import {
+  GetSystemInfoSchema,
+  GetBatteryStatusSchema,
+  GetDisplayInfoSchema,
+  getSystemInfo,
+  getBatteryStatus,
+  getDisplayInfo,
+} from '../tools/system.js'
+import {
+  GetUIElementsSchema,
+  ClickUIElementSchema,
+  GetUIElementValueSchema,
+  SetUIElementValueSchema,
+  FocusUIElementSchema,
+  getUIElements,
+  clickUIElement,
+  getUIElementValue,
+  setUIElementValue,
+  focusUIElement,
+} from '../tools/ui-element.js'
+import {
+  ListWindowsSchema,
+  FocusWindowSchema,
+  MoveWindowSchema,
+  ResizeWindowSchema,
+  MinimizeWindowSchema,
+  listWindows,
+  focusWindow,
+  moveWindow,
+  resizeWindow,
+  minimizeWindow,
+  type ListWindowsInput,
+  type WindowReferenceInput,
+  type MoveWindowInput,
+  type ResizeWindowInput,
+} from '../tools/window.js'
 
 /**
  * Converts a tool result to MCP response format.

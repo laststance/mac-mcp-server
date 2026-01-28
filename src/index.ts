@@ -11,8 +11,8 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
-import { createMcpServer } from './lib/server.js'
 import { registerAllTools } from './lib/register-tools.js'
+import { createMcpServer } from './lib/server.js'
 
 /**
  * Main entry point for the MCP server.
