@@ -1,6 +1,6 @@
 {
   "name": "mac-mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP Server for macOS automation via AppleScript - 44 tools for system control, window management, keyboard/mouse input, screenshots, UI automation, and more",
   "type": "module",
   "main": "dist/index.js",
