@@ -83,13 +83,16 @@ describe('Status bar macOS 26 regressions', () => {
       'menu bar items of menu bar 2 of runningProcess',
     )
     const usesProcessNameMatching = script.includes(
-      'clickMatchingStatusItem(appStatusItems, runningProcessName, "Electron")',
+      'clickMatchingStatusItem(appStatusItems, runningProcessName, "Electron", 20)',
     )
 
     // Assert
     expect(hasAppOwnedScan).toBe(true)
     expect(usesProcessNameMatching).toBe(true)
     expect(script).toContain('return searchableText contains identifier')
+    expect(script).toContain(
+      'if inspectedItemCount > itemLimit then exit repeat',
+    )
   })
 
   it('bounds lazy-loaded status menu polling before clicking a menu item', () => {
@@ -137,6 +140,38 @@ describe('Status bar macOS 26 regressions', () => {
     })
   })
 
+  it('bounds click traversal item scans per status bar scope', () => {
+    // Arrange
+    const itemScript = buildClickStatusBarItemScript('Electron')
+    const menuItemScript = buildClickStatusBarMenuItemScript('Electron', 'Quit')
+
+    // Act
+    const itemScriptUsesScopeLimits =
+      itemScript.includes(
+        'clickMatchingStatusItem(menuBarItems, "SystemUIServer", "Electron", 30)',
+      ) &&
+      itemScript.includes(
+        'clickMatchingStatusItem(ccMenuBarItems, "ControlCenter", "Electron", 40)',
+      ) &&
+      itemScript.includes(
+        'clickMatchingStatusItem(appStatusItems, runningProcessName, "Electron", 20)',
+      )
+    const menuItemScriptUsesScopeLimits =
+      menuItemScript.includes(
+        'clickMatchingStatusMenuItem(menuBarItems, "SystemUIServer", "Electron", "Quit", 30)',
+      ) &&
+      menuItemScript.includes(
+        'clickMatchingStatusMenuItem(ccMenuBarItems, "ControlCenter", "Electron", "Quit", 40)',
+      ) &&
+      menuItemScript.includes(
+        'clickMatchingStatusMenuItem(appStatusItems, runningProcessName, "Electron", "Quit", 20)',
+      )
+
+    // Assert
+    expect(itemScriptUsesScopeLimits).toBe(true)
+    expect(menuItemScriptUsesScopeLimits).toBe(true)
+  })
+
   it('uses the shared resilient script when clicking a status bar item', async () => {
     // Arrange
     mockExecuteAppleScript.mockResolvedValue({
@@ -154,7 +189,7 @@ describe('Status bar macOS 26 regressions', () => {
     })
     expect(mockExecuteAppleScript).toHaveBeenCalledWith({
       script: expect.stringContaining(
-        'clickMatchingStatusItem(appStatusItems, runningProcessName, "Electron")',
+        'clickMatchingStatusItem(appStatusItems, runningProcessName, "Electron", 20)',
       ),
       timeout: 15000,
     })
@@ -180,7 +215,7 @@ describe('Status bar macOS 26 regressions', () => {
     })
     expect(mockExecuteAppleScript).toHaveBeenCalledWith({
       script: expect.stringContaining(
-        'clickMatchingStatusMenuItem(appStatusItems, runningProcessName, "Electron", "Quit")',
+        'clickMatchingStatusMenuItem(appStatusItems, runningProcessName, "Electron", "Quit", 20)',
       ),
       timeout: 15000,
     })
