@@ -184,14 +184,18 @@ export const PressKeySchema = z.object({
 /**
  * Schema for key_combination tool.
  * @param modifiers - Array of modifier keys (command, shift, option, control)
- * @param key - Key to press with the modifiers
+ * @param key - Key to press with the modifiers in the focused app/menu shortcut path
  */
 export const KeyCombinationSchema = z.object({
   modifiers: z
     .array(z.enum(['command', 'shift', 'option', 'control']))
     .min(1)
     .describe('Modifier keys to hold (command, shift, option, control)'),
-  key: z.string().describe('Key to press with the modifiers'),
+  key: z
+    .string()
+    .describe(
+      'Key to press with modifiers in the focused app/menu shortcut path; OS-global hotkeys are not guaranteed',
+    ),
 })
 
 // ============================================================================
@@ -360,11 +364,12 @@ export async function pressKey(input: PressKeyInput): Promise<PressKeyResult> {
 }
 
 /**
- * Presses a key combination with modifier keys.
+ * Presses a focused-app or menu key combination with modifier keys.
  *
  * Holds the specified modifier keys (Command, Shift, Option, Control)
  * while pressing the target key. Supports both regular keys (a-z, 0-9)
- * and special keys (Enter, Tab, etc.).
+ * and special keys (Enter, Tab, etc.). OS-global hotkeys such as Electron
+ * globalShortcut/RegisterEventHotKey are not guaranteed by System Events.
  *
  * @param input - Input containing modifiers array and target key
  * @returns Result indicating success or failure with error message

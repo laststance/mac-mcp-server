@@ -122,11 +122,11 @@ On first use, macOS will prompt you to grant required permissions. See the [Perm
 
 ### Keyboard Input
 
-| Tool              | Description                                              |
-| ----------------- | -------------------------------------------------------- |
-| `type_text`       | Types text at the current cursor position                |
-| `press_key`       | Presses a key by name (Enter, Tab, Escape, F1-F12, etc.) |
-| `key_combination` | Presses a key combination (e.g., Cmd+C, Cmd+Shift+S)     |
+| Tool              | Description                                                                       |
+| ----------------- | --------------------------------------------------------------------------------- |
+| `type_text`       | Types text at the current cursor position                                         |
+| `press_key`       | Presses a key by name (Enter, Tab, Escape, F1-F12, etc.)                          |
+| `key_combination` | Presses a focused-app/menu key combination (not guaranteed for OS-global hotkeys) |
 
 ### Scroll and Navigation
 
@@ -303,6 +303,11 @@ await press_key({ key: 'enter' })
 
 // Key combination (Cmd+C)
 await key_combination({ modifiers: ['command'], key: 'c' })
+
+// Note: key_combination uses AppleScript System Events. It is intended for
+// focused-window shortcuts and app menu key equivalents, not OS-global hotkeys
+// such as Electron globalShortcut/RegisterEventHotKey handlers. Prefer
+// click_menu_item, click_status_bar_item, or an in-window shortcut for those.
 
 // Click at coordinates
 await click({ x: 500, y: 300 })

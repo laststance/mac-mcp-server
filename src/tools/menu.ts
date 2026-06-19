@@ -14,19 +14,16 @@ import { executeAppleScript } from '../lib/executor.js'
 import { checkAccessibility } from '../lib/permission.js'
 import { sanitizeIdentifier, sanitizeString } from '../lib/sanitizer.js'
 
-// ============================================================================
-// Constants
-// ============================================================================
-
-/**
- * Default timeout for menu operations in milliseconds.
- */
-const MENU_TIMEOUT = 15000
-
-/**
- * Time to wait for lazy-loaded menu items to populate (milliseconds).
- */
-const MENU_LOAD_DELAY = 0.3
+import {
+  MENU_TIMEOUT_MS,
+  STATUS_BAR_APP_ITEM_LIMIT,
+  STATUS_BAR_APP_PROCESS_LIMIT,
+  STATUS_BAR_CONTROL_CENTER_ITEM_LIMIT,
+  STATUS_BAR_MENU_LOAD_MAX_WAIT_ATTEMPTS,
+  STATUS_BAR_MENU_LOAD_POLL_DELAY_SECONDS,
+  STATUS_BAR_SYSTEM_ITEM_LIMIT,
+  STATUS_MENU_LOAD_DELAY_SECONDS,
+} from './constants.js'
 
 // ============================================================================
 // Interfaces
@@ -244,6 +241,341 @@ function parseMenuPath(menuPath: string): string[] {
     .filter((part) => part.length > 0)
 }
 
+/**
+ * Builds shared status-item AppleScript handlers so list/click tools reuse macOS 26 fallbacks.
+ * @returns
+ * - Shared handlers for JSON output, matching, clicking, and lazy menu waits
+ * @example
+ * buildStatusBarScriptHandlers().includes('on jsonEscape') // => true
+ */
+function buildStatusBarScriptHandlers(): string {
+  return String.raw`
+      on jsonEscape(rawValue)
+        set escapedValue to ""
+        repeat with nextCharacter in characters of (rawValue as text)
+          set nextText to nextCharacter as text
+          if nextText is quote then
+            set escapedValue to escapedValue & "\\\""
+          else if nextText is "\\" then
+            set escapedValue to escapedValue & "\\\\"
+          else if nextText is return then
+            set escapedValue to escapedValue & "\\n"
+          else if nextText is linefeed then
+            set escapedValue to escapedValue & "\\n"
+          else if nextText is tab then
+            set escapedValue to escapedValue & "\\t"
+          else
+            set escapedValue to escapedValue & nextText
+          end if
+        end repeat
+        return escapedValue
+      end jsonEscape
+
+      on statusItemDescription(statusItem, fallbackValue)
+        try
+          set itemDescription to description of statusItem
+          if itemDescription is not missing value and itemDescription is not "" then
+            return itemDescription as text
+          end if
+        end try
+
+        try
+          set itemTitle to title of statusItem
+          if itemTitle is not missing value and itemTitle is not "" then
+            return itemTitle as text
+          end if
+        end try
+
+        try
+          set itemName to name of statusItem
+          if itemName is not missing value and itemName is not "" then
+            return itemName as text
+          end if
+        end try
+
+        return fallbackValue
+      end statusItemDescription
+
+      on appendStatusItemJson(resultJson, itemIndex, statusItem, statusProcessName)
+        set itemDescription to my statusItemDescription(statusItem, statusProcessName)
+
+        if itemIndex > 1 then
+          set resultJson to resultJson & ","
+        end if
+
+        set resultJson to resultJson & "{"
+        set resultJson to resultJson & quote & "description" & quote & ":" & quote & my jsonEscape(itemDescription) & quote & ","
+        set resultJson to resultJson & quote & "position" & quote & ":" & itemIndex & ","
+        set resultJson to resultJson & quote & "processName" & quote & ":" & quote & my jsonEscape(statusProcessName) & quote
+        set resultJson to resultJson & "}"
+
+        return {resultJson, itemIndex + 1}
+      end appendStatusItemJson
+
+      on statusItemMatches(statusItem, statusProcessName, identifier)
+        set searchableText to my statusItemDescription(statusItem, statusProcessName) & " " & statusProcessName
+
+        try
+          set itemName to name of statusItem
+          if itemName is not missing value then
+            set searchableText to searchableText & " " & (itemName as text)
+          end if
+        end try
+
+        try
+          set itemTitle to title of statusItem
+          if itemTitle is not missing value then
+            set searchableText to searchableText & " " & (itemTitle as text)
+          end if
+        end try
+
+        return searchableText contains identifier
+      end statusItemMatches
+
+      on waitForStatusMenu(statusItem)
+        set waitCount to 0
+        repeat while waitCount < ${STATUS_BAR_MENU_LOAD_MAX_WAIT_ATTEMPTS}
+          try
+            set menuItems to menu items of menu 1 of statusItem
+            if (count of menuItems) > 0 then
+              exit repeat
+            end if
+          end try
+          delay ${STATUS_BAR_MENU_LOAD_POLL_DELAY_SECONDS}
+          set waitCount to waitCount + 1
+        end repeat
+      end waitForStatusMenu
+
+      on clickMatchingStatusItem(menuBarItems, statusProcessName, identifier)
+        repeat with statusItem in menuBarItems
+          try
+            if my statusItemMatches(statusItem, statusProcessName, identifier) then
+              click statusItem
+              delay ${STATUS_MENU_LOAD_DELAY_SECONDS}
+              return true
+            end if
+          end try
+        end repeat
+        return false
+      end clickMatchingStatusItem
+
+      on clickMatchingStatusMenuItem(menuBarItems, statusProcessName, identifier, targetMenuItem)
+        repeat with statusItem in menuBarItems
+          try
+            if my statusItemMatches(statusItem, statusProcessName, identifier) then
+              click statusItem
+              delay ${STATUS_MENU_LOAD_DELAY_SECONDS}
+              my waitForStatusMenu(statusItem)
+              click menu item targetMenuItem of menu 1 of statusItem
+              return true
+            end if
+          end try
+        end repeat
+        return false
+      end clickMatchingStatusMenuItem
+`
+}
+
+/**
+ * Builds status item listing AppleScript when listStatusBarItems needs resilient macOS scopes.
+ * @returns
+ * - AppleScript that tolerates missing SystemUIServer menu bars and scans app-owned items
+ * @example
+ * buildListStatusBarItemsScript().includes('menu bar 2 of runningProcess') // => true
+ */
+export function buildListStatusBarItemsScript(): string {
+  return `
+    tell application "System Events"
+${buildStatusBarScriptHandlers()}
+      try
+        set resultJson to "["
+        set itemIndex to 1
+
+        -- System scopes are independent so macOS 26 misses do not abort fallbacks.
+        try
+          tell process "SystemUIServer"
+            set menuBarItems to menu bar items of menu bar 1
+            set scopedItemCount to 0
+            repeat with menuBarItem in menuBarItems
+              set scopedItemCount to scopedItemCount + 1
+              if scopedItemCount > ${STATUS_BAR_SYSTEM_ITEM_LIMIT} then exit repeat
+              set appendResult to my appendStatusItemJson(resultJson, itemIndex, menuBarItem, "SystemUIServer")
+              set resultJson to item 1 of appendResult
+              set itemIndex to item 2 of appendResult
+            end repeat
+          end tell
+        end try
+
+        try
+          tell process "ControlCenter"
+            set ccMenuBarItems to menu bar items of menu bar 1
+            set scopedItemCount to 0
+            repeat with ccItem in ccMenuBarItems
+              set scopedItemCount to scopedItemCount + 1
+              if scopedItemCount > ${STATUS_BAR_CONTROL_CENTER_ITEM_LIMIT} then exit repeat
+              set appendResult to my appendStatusItemJson(resultJson, itemIndex, ccItem, "ControlCenter")
+              set resultJson to item 1 of appendResult
+              set itemIndex to item 2 of appendResult
+            end repeat
+          end tell
+        end try
+
+        try
+          set inspectedProcessCount to 0
+          repeat with runningProcess in application processes
+            set inspectedProcessCount to inspectedProcessCount + 1
+            if inspectedProcessCount > ${STATUS_BAR_APP_PROCESS_LIMIT} then exit repeat
+
+            try
+              set runningProcessName to name of runningProcess
+              if runningProcessName is not "SystemUIServer" and runningProcessName is not "ControlCenter" then
+                if (count of menu bars of runningProcess) >= 2 then
+                  set appStatusItems to menu bar items of menu bar 2 of runningProcess
+                  set appItemCount to 0
+                  repeat with appStatusItem in appStatusItems
+                    set appItemCount to appItemCount + 1
+                    if appItemCount > ${STATUS_BAR_APP_ITEM_LIMIT} then exit repeat
+                    set appendResult to my appendStatusItemJson(resultJson, itemIndex, appStatusItem, runningProcessName)
+                    set resultJson to item 1 of appendResult
+                    set itemIndex to item 2 of appendResult
+                  end repeat
+                end if
+              end if
+            end try
+          end repeat
+        end try
+
+        set resultJson to resultJson & "]"
+        return resultJson
+      on error errMsg
+        return "error: " & errMsg
+      end try
+    end tell
+  `
+}
+
+/**
+ * Builds status item click AppleScript when clickStatusBarItem needs resilient macOS scopes.
+ * @param sanitizedId - Identifier already escaped for AppleScript interpolation.
+ * @returns
+ * - AppleScript that clicks the first matching status item across all scopes
+ * @example
+ * buildClickStatusBarItemScript('Electron').includes('clickMatchingStatusItem') // => true
+ */
+export function buildClickStatusBarItemScript(sanitizedId: string): string {
+  return `
+    tell application "System Events"
+${buildStatusBarScriptHandlers()}
+      try
+        try
+          tell process "SystemUIServer"
+            set menuBarItems to menu bar items of menu bar 1
+            if my clickMatchingStatusItem(menuBarItems, "SystemUIServer", "${sanitizedId}") then
+              return "success: Clicked status bar item '${sanitizedId}'"
+            end if
+          end tell
+        end try
+
+        try
+          tell process "ControlCenter"
+            set ccMenuBarItems to menu bar items of menu bar 1
+            if my clickMatchingStatusItem(ccMenuBarItems, "ControlCenter", "${sanitizedId}") then
+              return "success: Clicked status bar item '${sanitizedId}'"
+            end if
+          end tell
+        end try
+
+        try
+          set inspectedProcessCount to 0
+          repeat with runningProcess in application processes
+            set inspectedProcessCount to inspectedProcessCount + 1
+            if inspectedProcessCount > ${STATUS_BAR_APP_PROCESS_LIMIT} then exit repeat
+
+            try
+              set runningProcessName to name of runningProcess
+              if runningProcessName is not "SystemUIServer" and runningProcessName is not "ControlCenter" then
+                if (count of menu bars of runningProcess) >= 2 then
+                  set appStatusItems to menu bar items of menu bar 2 of runningProcess
+                  if my clickMatchingStatusItem(appStatusItems, runningProcessName, "${sanitizedId}") then
+                    return "success: Clicked status bar item '${sanitizedId}'"
+                  end if
+                end if
+              end if
+            end try
+          end repeat
+        end try
+
+        return "error: Status bar item '${sanitizedId}' not found"
+      on error errMsg
+        return "error: " & errMsg
+      end try
+    end tell
+  `
+}
+
+/**
+ * Builds status menu item click AppleScript when clickStatusBarMenuItem opens lazy tray menus.
+ * @param sanitizedId - Status item identifier already escaped for AppleScript interpolation.
+ * @param sanitizedMenuPath - Menu item name already escaped for AppleScript interpolation.
+ * @returns
+ * - AppleScript that opens a status item and clicks a bounded lazy-loaded menu item
+ * @example
+ * buildClickStatusBarMenuItemScript('Electron', 'Quit').includes('waitForStatusMenu') // => true
+ */
+export function buildClickStatusBarMenuItemScript(
+  sanitizedId: string,
+  sanitizedMenuPath: string,
+): string {
+  return `
+    tell application "System Events"
+${buildStatusBarScriptHandlers()}
+      try
+        try
+          tell process "SystemUIServer"
+            set menuBarItems to menu bar items of menu bar 1
+            if my clickMatchingStatusMenuItem(menuBarItems, "SystemUIServer", "${sanitizedId}", "${sanitizedMenuPath}") then
+              return "success: Clicked menu item '${sanitizedMenuPath}' in status bar item '${sanitizedId}'"
+            end if
+          end tell
+        end try
+
+        try
+          tell process "ControlCenter"
+            set ccMenuBarItems to menu bar items of menu bar 1
+            if my clickMatchingStatusMenuItem(ccMenuBarItems, "ControlCenter", "${sanitizedId}", "${sanitizedMenuPath}") then
+              return "success: Clicked menu item '${sanitizedMenuPath}' in status bar item '${sanitizedId}'"
+            end if
+          end tell
+        end try
+
+        try
+          set inspectedProcessCount to 0
+          repeat with runningProcess in application processes
+            set inspectedProcessCount to inspectedProcessCount + 1
+            if inspectedProcessCount > ${STATUS_BAR_APP_PROCESS_LIMIT} then exit repeat
+
+            try
+              set runningProcessName to name of runningProcess
+              if runningProcessName is not "SystemUIServer" and runningProcessName is not "ControlCenter" then
+                if (count of menu bars of runningProcess) >= 2 then
+                  set appStatusItems to menu bar items of menu bar 2 of runningProcess
+                  if my clickMatchingStatusMenuItem(appStatusItems, runningProcessName, "${sanitizedId}", "${sanitizedMenuPath}") then
+                    return "success: Clicked menu item '${sanitizedMenuPath}' in status bar item '${sanitizedId}'"
+                  end if
+                end if
+              end if
+            end try
+          end repeat
+        end try
+
+        return "error: Status bar item '${sanitizedId}' not found or menu item '${sanitizedMenuPath}' not found"
+      on error errMsg
+        return "error: " & errMsg
+      end try
+    end tell
+  `
+}
+
 // ============================================================================
 // Tool Implementations
 // ============================================================================
@@ -390,7 +722,7 @@ export async function listMenuItems(
     end tell
   `
 
-  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT })
+  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT_MS })
 
   if (result.success && result.output) {
     const output = result.output.toString()
@@ -518,7 +850,7 @@ export async function clickMenuItem(
     end tell
   `
 
-  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT })
+  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT_MS })
 
   if (result.success && result.output) {
     const output = result.output.toString()
@@ -635,7 +967,7 @@ export async function getMenuItemState(
     end tell
   `
 
-  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT })
+  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT_MS })
 
   if (result.success && result.output) {
     const output = result.output.toString()
@@ -685,81 +1017,9 @@ export async function listStatusBarItems(): Promise<ListStatusBarItemsResult> {
     }
   }
 
-  const script = `
-    tell application "System Events"
-      try
-        set resultJson to "["
-        set itemIndex to 1
+  const script = buildListStatusBarItemsScript()
 
-        -- Get status bar items from SystemUIServer
-        tell process "SystemUIServer"
-          set menuBar to menu bar 1
-          set menuBarItems to menu bar items of menuBar
-
-          repeat with menuBarItem in menuBarItems
-            try
-              if itemIndex > 1 then
-                set resultJson to resultJson & ","
-              end if
-
-              set itemDesc to description of menuBarItem
-              if itemDesc is missing value or itemDesc is "" then
-                set itemDesc to "Unknown"
-              end if
-
-              set resultJson to resultJson & "{"
-              set resultJson to resultJson & quote & "description" & quote & ":" & quote & itemDesc & quote & ","
-              set resultJson to resultJson & quote & "position" & quote & ":" & itemIndex & ","
-              set resultJson to resultJson & quote & "processName" & quote & ":" & quote & "SystemUIServer" & quote
-              set resultJson to resultJson & "}"
-
-              set itemIndex to itemIndex + 1
-
-              if itemIndex > 30 then exit repeat
-            end try
-          end repeat
-        end tell
-
-        -- Also check Control Center items
-        try
-          tell process "ControlCenter"
-            set ccMenuBar to menu bar 1
-            set ccItems to menu bar items of ccMenuBar
-
-            repeat with ccItem in ccItems
-              try
-                if itemIndex > 1 then
-                  set resultJson to resultJson & ","
-                end if
-
-                set itemDesc to description of ccItem
-                if itemDesc is missing value or itemDesc is "" then
-                  set itemDesc to "Control Center"
-                end if
-
-                set resultJson to resultJson & "{"
-                set resultJson to resultJson & quote & "description" & quote & ":" & quote & itemDesc & quote & ","
-                set resultJson to resultJson & quote & "position" & quote & ":" & itemIndex & ","
-                set resultJson to resultJson & quote & "processName" & quote & ":" & quote & "ControlCenter" & quote
-                set resultJson to resultJson & "}"
-
-                set itemIndex to itemIndex + 1
-
-                if itemIndex > 40 then exit repeat
-              end try
-            end repeat
-          end tell
-        end try
-
-        set resultJson to resultJson & "]"
-        return resultJson
-      on error errMsg
-        return "error: " & errMsg
-      end try
-    end tell
-  `
-
-  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT })
+  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT_MS })
 
   if (result.success && result.output) {
     const output = result.output.toString()
@@ -827,53 +1087,9 @@ export async function clickStatusBarItem(
     }
   }
 
-  const script = `
-    tell application "System Events"
-      try
-        -- Try SystemUIServer first
-        tell process "SystemUIServer"
-          set menuBar to menu bar 1
-          set menuBarItems to menu bar items of menuBar
+  const script = buildClickStatusBarItemScript(sanitizedId)
 
-          repeat with menuBarItem in menuBarItems
-            try
-              set itemDesc to description of menuBarItem
-              if itemDesc contains "${sanitizedId}" then
-                click menuBarItem
-                delay ${MENU_LOAD_DELAY}
-                return "success: Clicked status bar item '${sanitizedId}'"
-              end if
-            end try
-          end repeat
-        end tell
-
-        -- Try ControlCenter
-        try
-          tell process "ControlCenter"
-            set ccMenuBar to menu bar 1
-            set ccItems to menu bar items of ccMenuBar
-
-            repeat with ccItem in ccItems
-              try
-                set itemDesc to description of ccItem
-                if itemDesc contains "${sanitizedId}" then
-                  click ccItem
-                  delay ${MENU_LOAD_DELAY}
-                  return "success: Clicked status bar item '${sanitizedId}'"
-                end if
-              end try
-            end repeat
-          end tell
-        end try
-
-        return "error: Status bar item '${sanitizedId}' not found"
-      on error errMsg
-        return "error: " & errMsg
-      end try
-    end tell
-  `
-
-  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT })
+  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT_MS })
 
   if (result.success && result.output) {
     const output = result.output.toString()
@@ -940,77 +1156,12 @@ export async function clickStatusBarMenuItem(
     }
   }
 
-  const script = `
-    tell application "System Events"
-      try
-        set foundItem to false
+  const script = buildClickStatusBarMenuItemScript(
+    sanitizedId,
+    sanitizedMenuPath,
+  )
 
-        -- Try SystemUIServer first
-        tell process "SystemUIServer"
-          set menuBar to menu bar 1
-          set menuBarItems to menu bar items of menuBar
-
-          repeat with menuBarItem in menuBarItems
-            try
-              set itemDesc to description of menuBarItem
-              if itemDesc contains "${sanitizedId}" then
-                click menuBarItem
-                delay ${MENU_LOAD_DELAY}
-
-                -- Wait for menu to load (handles lazy-loading)
-                set maxWait to 5
-                set waitCount to 0
-                repeat while waitCount < maxWait
-                  try
-                    set menuItems to menu items of menu 1 of menuBarItem
-                    if (count of menuItems) > 0 then
-                      exit repeat
-                    end if
-                  end try
-                  delay 0.2
-                  set waitCount to waitCount + 1
-                end repeat
-
-                -- Click the menu item
-                click menu item "${sanitizedMenuPath}" of menu 1 of menuBarItem
-                set foundItem to true
-                return "success: Clicked menu item '${sanitizedMenuPath}' in status bar item '${sanitizedId}'"
-              end if
-            end try
-          end repeat
-        end tell
-
-        if not foundItem then
-          -- Try ControlCenter
-          try
-            tell process "ControlCenter"
-              set ccMenuBar to menu bar 1
-              set ccItems to menu bar items of ccMenuBar
-
-              repeat with ccItem in ccItems
-                try
-                  set itemDesc to description of ccItem
-                  if itemDesc contains "${sanitizedId}" then
-                    click ccItem
-                    delay ${MENU_LOAD_DELAY}
-
-                    click menu item "${sanitizedMenuPath}" of menu 1 of ccItem
-                    return "success: Clicked menu item '${sanitizedMenuPath}' in status bar item '${sanitizedId}'"
-                  end if
-                end try
-              end repeat
-            end tell
-          end try
-        end if
-
-        return "error: Status bar item '${sanitizedId}' not found or menu item '${sanitizedMenuPath}' not found"
-      on error errMsg
-        return "error: " & errMsg
-      end try
-    end tell
-  `
-
-  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT })
+  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT_MS })
 
   if (result.success && result.output) {
     const output = result.output.toString()
@@ -1161,7 +1312,7 @@ export async function getMenuBarStructure(
     end tell
   `
 
-  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT })
+  const result = await executeAppleScript({ script, timeout: MENU_TIMEOUT_MS })
 
   if (result.success && result.output) {
     const output = result.output.toString()

@@ -14,3 +14,4 @@ pnpm-lock.yaml
 # Claude/Kiro config (preserve custom formatting)
 .claude/
 .kiro/
+.serena/
