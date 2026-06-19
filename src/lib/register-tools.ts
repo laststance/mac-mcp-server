@@ -9,15 +9,6 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
-// System tools
-
-// Audio tools
-
-// Clipboard tools
-
-// Notification tools
-
-// Application tools
 import {
   ListRunningAppsSchema,
   LaunchAppSchema,
@@ -38,15 +29,12 @@ import {
   getMuteStatus,
   setMute,
 } from '../tools/audio.js'
-
 import {
   GetClipboardSchema,
   SetClipboardSchema,
   getClipboard,
   setClipboard,
 } from '../tools/clipboard.js'
-
-// Finder tools
 import {
   RevealInFinderSchema,
   GetSelectedFilesSchema,
@@ -55,12 +43,6 @@ import {
   getSelectedFiles,
   getFinderWindowPath,
 } from '../tools/finder.js'
-
-// Window tools
-
-// Mouse tools
-
-// Keyboard tools
 import {
   TypeTextSchema,
   PressKeySchema,
@@ -70,14 +52,6 @@ import {
   keyCombination,
   type TypeTextInput,
 } from '../tools/keyboard.js'
-
-// Scroll tools
-
-// Screenshot tools
-
-// UI Element tools
-
-// Menu tools
 import {
   ListMenuItemsSchema,
   ClickMenuItemSchema,
@@ -422,7 +396,7 @@ export function registerAllTools(server: McpServer): void {
 
   server.tool(
     'key_combination',
-    'Presses a key combination with modifiers (e.g., Cmd+C, Cmd+Shift+S)',
+    'Presses a focused-app or menu key combination with modifiers; OS-global hotkeys such as Electron globalShortcut are not guaranteed',
     KeyCombinationSchema.shape,
     async (params) => toMcpResponse(await keyCombination(params)),
   )
