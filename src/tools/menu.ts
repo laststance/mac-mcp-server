@@ -346,8 +346,11 @@ function buildStatusBarScriptHandlers(): string {
         end repeat
       end waitForStatusMenu
 
-      on clickMatchingStatusItem(menuBarItems, statusProcessName, identifier)
+      on clickMatchingStatusItem(menuBarItems, statusProcessName, identifier, itemLimit)
+        set inspectedItemCount to 0
         repeat with statusItem in menuBarItems
+          set inspectedItemCount to inspectedItemCount + 1
+          if inspectedItemCount > itemLimit then exit repeat
           try
             if my statusItemMatches(statusItem, statusProcessName, identifier) then
               click statusItem
@@ -359,8 +362,11 @@ function buildStatusBarScriptHandlers(): string {
         return false
       end clickMatchingStatusItem
 
-      on clickMatchingStatusMenuItem(menuBarItems, statusProcessName, identifier, targetMenuItem)
+      on clickMatchingStatusMenuItem(menuBarItems, statusProcessName, identifier, targetMenuItem, itemLimit)
+        set inspectedItemCount to 0
         repeat with statusItem in menuBarItems
+          set inspectedItemCount to inspectedItemCount + 1
+          if inspectedItemCount > itemLimit then exit repeat
           try
             if my statusItemMatches(statusItem, statusProcessName, identifier) then
               click statusItem
@@ -470,7 +476,7 @@ ${buildStatusBarScriptHandlers()}
         try
           tell process "SystemUIServer"
             set menuBarItems to menu bar items of menu bar 1
-            if my clickMatchingStatusItem(menuBarItems, "SystemUIServer", "${sanitizedId}") then
+            if my clickMatchingStatusItem(menuBarItems, "SystemUIServer", "${sanitizedId}", ${STATUS_BAR_SYSTEM_ITEM_LIMIT}) then
               return "success: Clicked status bar item '${sanitizedId}'"
             end if
           end tell
@@ -479,7 +485,7 @@ ${buildStatusBarScriptHandlers()}
         try
           tell process "ControlCenter"
             set ccMenuBarItems to menu bar items of menu bar 1
-            if my clickMatchingStatusItem(ccMenuBarItems, "ControlCenter", "${sanitizedId}") then
+            if my clickMatchingStatusItem(ccMenuBarItems, "ControlCenter", "${sanitizedId}", ${STATUS_BAR_CONTROL_CENTER_ITEM_LIMIT}) then
               return "success: Clicked status bar item '${sanitizedId}'"
             end if
           end tell
@@ -496,7 +502,7 @@ ${buildStatusBarScriptHandlers()}
               if runningProcessName is not "SystemUIServer" and runningProcessName is not "ControlCenter" then
                 if (count of menu bars of runningProcess) >= 2 then
                   set appStatusItems to menu bar items of menu bar 2 of runningProcess
-                  if my clickMatchingStatusItem(appStatusItems, runningProcessName, "${sanitizedId}") then
+                  if my clickMatchingStatusItem(appStatusItems, runningProcessName, "${sanitizedId}", ${STATUS_BAR_APP_ITEM_LIMIT}) then
                     return "success: Clicked status bar item '${sanitizedId}'"
                   end if
                 end if
@@ -533,7 +539,7 @@ ${buildStatusBarScriptHandlers()}
         try
           tell process "SystemUIServer"
             set menuBarItems to menu bar items of menu bar 1
-            if my clickMatchingStatusMenuItem(menuBarItems, "SystemUIServer", "${sanitizedId}", "${sanitizedMenuPath}") then
+            if my clickMatchingStatusMenuItem(menuBarItems, "SystemUIServer", "${sanitizedId}", "${sanitizedMenuPath}", ${STATUS_BAR_SYSTEM_ITEM_LIMIT}) then
               return "success: Clicked menu item '${sanitizedMenuPath}' in status bar item '${sanitizedId}'"
             end if
           end tell
@@ -542,7 +548,7 @@ ${buildStatusBarScriptHandlers()}
         try
           tell process "ControlCenter"
             set ccMenuBarItems to menu bar items of menu bar 1
-            if my clickMatchingStatusMenuItem(ccMenuBarItems, "ControlCenter", "${sanitizedId}", "${sanitizedMenuPath}") then
+            if my clickMatchingStatusMenuItem(ccMenuBarItems, "ControlCenter", "${sanitizedId}", "${sanitizedMenuPath}", ${STATUS_BAR_CONTROL_CENTER_ITEM_LIMIT}) then
               return "success: Clicked menu item '${sanitizedMenuPath}' in status bar item '${sanitizedId}'"
             end if
           end tell
@@ -559,7 +565,7 @@ ${buildStatusBarScriptHandlers()}
               if runningProcessName is not "SystemUIServer" and runningProcessName is not "ControlCenter" then
                 if (count of menu bars of runningProcess) >= 2 then
                   set appStatusItems to menu bar items of menu bar 2 of runningProcess
-                  if my clickMatchingStatusMenuItem(appStatusItems, runningProcessName, "${sanitizedId}", "${sanitizedMenuPath}") then
+                  if my clickMatchingStatusMenuItem(appStatusItems, runningProcessName, "${sanitizedId}", "${sanitizedMenuPath}", ${STATUS_BAR_APP_ITEM_LIMIT}) then
                     return "success: Clicked menu item '${sanitizedMenuPath}' in status bar item '${sanitizedId}'"
                   end if
                 end if
